@@ -15,5 +15,5 @@ from table_picker import TablePicker
 with st.sidebar:
     tb = TablePicker()
     tb.menu()
-    table = tb.get_path()
+    table = tb.get_path() #returns a string with a fully qualified name for a table. 
 ```
