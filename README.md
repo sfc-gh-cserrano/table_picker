@@ -1,5 +1,7 @@
 # SiS Table Picker
 
+>Requires Streamlit 1.39 or greater
+
 ## Instructions
 
 - Copy `table_picker.py` to your SiS app
