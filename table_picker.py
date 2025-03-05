@@ -10,7 +10,7 @@ class TablePicker:
 
     @st.cache_data(show_spinner=False)
     def get_databases(_self):
-        inventory = _self.session.sql("show tables in account").collect()
+        inventory = _self.session.sql("show terse tables in account").collect()
         ret_inv = pd.DataFrame(inventory)[["database_name", "schema_name", "name"]]
         return ret_inv
 
