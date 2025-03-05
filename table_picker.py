@@ -2,6 +2,8 @@
 import streamlit as st
 from snowflake.snowpark.context import get_active_session
 import pandas as pd
+from string import Template
+import numpy as np
 
 
 class TablePicker:
@@ -12,27 +14,33 @@ class TablePicker:
         ret_inv = pd.DataFrame(inventory)[["database_name", "schema_name", "name"]]
         return ret_inv
 
-    def __init__(self):
+    def __init__(self, height: int = -1):
         self.session = get_active_session()
         self.tables = self.get_databases()
-
-        self.object_css = """
+        db_count = len(self.tables["database_name"].unique())
+        self.height = (db_count * 30) + 60 if height == -1 else height + 60
+        self.object_css = Template(
+            """
         <style>
         
         div[class*="st-key-menu_item_"] > div[class="stButton"]{
-         max-height:.70rem;
+         max-height:.8rem;
          padding:0px;
+         margin:0px;
         }
         div[class*="st-key-menu_item_"] button{
-            appearance:none;
             justify-content:flex-start;
-            max-height:.45rem;
-            min-height:1.5rem;
             color:#7f7f7f;
+            padding:1rem;
             padding-left:.5rem;
-            margin:0px;
             border:none;
+            border-radius:0px;
+            width:100%;
+            overflow-hidden;
             background-color:white;
+            margin:0px;
+            max-height:.75rem;
+            min-height:.75rem;
         }
         div[class*="st-key-menu_item_"] button:hover{
         background-color:#f1f1f1;
@@ -53,24 +61,50 @@ class TablePicker:
         div[class*="st-key-menu_item_"] button p:hover{
             overflow: visible;
         }
-        .st-key-menu_container{
+        div[class*="st-key-menu_item_"] button:focus:not(:active){
             background-color:white;
-            max-height:900px;
+            color:#7f7f7f;
+        }
+
+        
+        div[height="$height"]:has(.st-key-menu_container){
+            background-color:white;
             overflow-y:scroll;
             overflow-x:hidden;
-            padding-top:1rem;
-            padding-bottom:1rem;
+            margin-bottom:1rem;
+        }
+
+        .st-key-menu_container div[data-testid="stPopover"] button{
+        max-height:1.5rem;
+        min-height:1.5rem;
+        color:#7f7f7f;
+        }
+        .st-key-menu_container div[data-testid="stPopover"] button svg{
+        height:1rem;
+        color:#7f7f7f;
         }
         div[class*="st-key-menu_item_schema_"] button{
         margin-left:2rem;
+        width:calc(100% - 2rem);
         }
         div[class*="st-key-menu_item_table_"] button{
         margin-left:4rem;
+        width:calc(100% - 4rem);
         }
-        
+        .st-key-menu_search input{
+        font-size:14px;
+        color:#7f7f7f;
+        height:1.75rem;
+        }
+        .st-key-menu_search div[data-testid="stTextInputRootElement"]{
+        height:1.75rem;
+        border:0px;
+        }
+
         </style>
         """
-        st.html(self.object_css)
+        )
+        st.html(self.object_css.substitute(height=self.height))
 
         if "scoped_db" not in st.session_state:
             st.session_state["scoped_db"] = None
@@ -128,15 +162,46 @@ class TablePicker:
         st.button(
             f"{levels.get(level)}$~~${label}",
             key=f"menu_item_{level}_{key}",
-            use_container_width=True,
+            use_container_width=False,
             on_click=on_click,
             args=args,
             **icon,
         )
 
+    def filter_menu(self, text: str, columns: list):
+        filter_mask = np.column_stack(
+            [
+                self.tables[col].astype(str).str.contains(text, na=False, case=False)
+                for col in self.tables
+                if col in columns
+            ]
+        )
+        return self.tables.loc[filter_mask.any(axis=1)]
+
     def menu(self):
-        with st.container(key="menu_container"):
-            for database in sorted(self.tables["database_name"].unique()):
+        with st.container(key="menu_container", border=True, height=self.height):
+            search_menu = st.columns((2, 1))
+            with search_menu[1].popover(
+                "", icon=":material/settings:", use_container_width=True
+            ):
+                options = []
+                if st.toggle("Database", value=True):
+                    options.append("database_name")
+                if st.toggle("Schema", value=True):
+                    options.append("schema_name")
+                if st.toggle("Table", value=True):
+                    options.append("name")
+            search_text = search_menu[0].text_input(
+                "",
+                key="menu_search",
+                label_visibility="collapsed",
+                placeholder="Search",
+            )
+            if search_text:
+                inventory = self.filter_menu(text=search_text, columns=options)
+            else:
+                inventory = self.tables
+            for database in sorted(inventory["database_name"].unique()):
                 self.render_button(
                     level="db",
                     label=database,
@@ -150,7 +215,7 @@ class TablePicker:
 
                 if st.session_state["scoped_db"] == database:
                     for schemas in sorted(
-                        self.tables.loc[self.tables["database_name"] == database][
+                        inventory.loc[self.tables["database_name"] == database][
                             "schema_name"
                         ].unique()
                     ):
@@ -172,7 +237,7 @@ class TablePicker:
                             and st.session_state["scoped_schema"] == schemas
                         ):
                             for table in sorted(
-                                self.tables.loc[
+                                inventory.loc[
                                     (self.tables["database_name"] == database)
                                     & (self.tables["schema_name"] == schemas)
                                 ]["name"].unique()
