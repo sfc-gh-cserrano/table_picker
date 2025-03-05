@@ -36,7 +36,7 @@ class TablePicker:
             border:none;
             border-radius:0px;
             width:100%;
-            overflow-hidden;
+            overflow:hidden;
             background-color:white;
             margin:0px;
             max-height:.75rem;
